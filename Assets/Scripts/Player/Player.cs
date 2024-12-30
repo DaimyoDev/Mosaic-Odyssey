@@ -4,11 +4,14 @@ public class Player : MonoBehaviour
 {
     [SerializeField] MovementSubscription GetInput;
     [SerializeField] Camera PlayerCamera;
+    [SerializeField] int mouseSensitivity;
+    [SerializeField] int speed;
+    [SerializeField] int jumpPower;
     Rigidbody rb;
 
     private Vector3 PlayerMovement;
     private Vector2 MouseMovement;
-    private float groundCheckDistance = 1.0f;
+    private float groundCheckDistance = 1.5f;
     private float xRotation = 0f;
 
     private void Awake()
@@ -24,36 +27,44 @@ public class Player : MonoBehaviour
 
     private void Update()
     {
-        //Make sure to get the look vector of the player and apply movement accordingly
-        PlayerMovement = new Vector3(GetInput.MoveInput.x, 0, GetInput.MoveInput.z);
-        MouseMovement = new Vector2(GetInput.MouseMove.x, GetInput.MouseMove.y);
+        MovePlayer();
+        MouseRotatePlayer();
+    }
 
+    private void MovePlayer()
+    {
+        PlayerMovement = new Vector3(GetInput.MoveInput.x, 0, GetInput.MoveInput.z);
         PlayerMovement.Normalize();
+
+        Vector3 movementDirection = transform.TransformDirection(PlayerMovement);
 
         Vector3 desiredVelocity = rb.linearVelocity;
 
-        desiredVelocity.x = PlayerMovement.x * 5;
-        desiredVelocity.z = PlayerMovement.z * 5;
+        desiredVelocity.x = movementDirection.x * speed;
+        desiredVelocity.z = movementDirection.z * speed;
 
         if (GetInput.Jump > 0 && IsGrounded())
         {
-            desiredVelocity.y = GetInput.Jump * 5;
+            desiredVelocity.y = GetInput.Jump * jumpPower;
         }
 
         rb.linearVelocity = desiredVelocity;
+    }
 
-        //Create separate function for player movement and mouse movement!
-        float mouseX = MouseMovement.x * 10 * Time.deltaTime;
-        float mouseY = MouseMovement.y * 10 * Time.deltaTime;
+    private void MouseRotatePlayer()
+    {
+        MouseMovement = new Vector2(GetInput.MouseMove.x, GetInput.MouseMove.y);
+
+        float mouseX = MouseMovement.x * mouseSensitivity * Time.deltaTime;
+        float mouseY = MouseMovement.y * mouseSensitivity * Time.deltaTime;
 
         xRotation -= mouseY;
         xRotation = Mathf.Clamp(xRotation, -90f, 90f);
 
         PlayerCamera.transform.localRotation = Quaternion.Euler(xRotation, 0f, 0f);
         transform.Rotate(Vector3.up * mouseX);
-
-
     }
+
     private bool IsGrounded()
     {
         return Physics.Raycast(transform.position, Vector3.down, groundCheckDistance);
