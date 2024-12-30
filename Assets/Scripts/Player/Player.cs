@@ -3,11 +3,13 @@ using UnityEngine;
 public class Player : MonoBehaviour
 {
     [SerializeField] MovementSubscription GetInput;
+    [SerializeField] Camera PlayerCamera;
     Rigidbody rb;
 
-    Vector3 PlayerMovement;
-    float Jump;
-    float groundCheckDistance = 1.0f;
+    private Vector3 PlayerMovement;
+    private Vector2 MouseMovement;
+    private float groundCheckDistance = 1.0f;
+    private float xRotation = 0f;
 
     private void Awake()
     {
@@ -15,9 +17,16 @@ public class Player : MonoBehaviour
         rb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ | RigidbodyConstraints.FreezeRotationY;
     }
 
+    private void Start()
+    {
+        Cursor.lockState = CursorLockMode.Locked;
+    }
+
     private void Update()
     {
+        //Make sure to get the look vector of the player and apply movement accordingly
         PlayerMovement = new Vector3(GetInput.MoveInput.x, 0, GetInput.MoveInput.z);
+        MouseMovement = new Vector2(GetInput.MouseMove.x, GetInput.MouseMove.y);
 
         PlayerMovement.Normalize();
 
@@ -32,17 +41,21 @@ public class Player : MonoBehaviour
         }
 
         rb.linearVelocity = desiredVelocity;
-    }
 
-    private void OnDrawGizmos()
-    {
-        Gizmos.color = Color.red;
-        Gizmos.DrawLine(transform.position, transform.position + Vector3.down * groundCheckDistance);
+        //Create separate function for player movement and mouse movement!
+        float mouseX = MouseMovement.x * 10 * Time.deltaTime;
+        float mouseY = MouseMovement.y * 10 * Time.deltaTime;
+
+        xRotation -= mouseY;
+        xRotation = Mathf.Clamp(xRotation, -90f, 90f);
+
+        PlayerCamera.transform.localRotation = Quaternion.Euler(xRotation, 0f, 0f);
+        transform.Rotate(Vector3.up * mouseX);
+
+
     }
     private bool IsGrounded()
     {
-        // Cast a ray downward from the player's position
         return Physics.Raycast(transform.position, Vector3.down, groundCheckDistance);
     }
-
 }

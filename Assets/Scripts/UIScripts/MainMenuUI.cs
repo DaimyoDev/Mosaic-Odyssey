@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using UnityEngine.UIElements;
 
 public class MainMenuUI : MonoBehaviour
@@ -36,7 +37,7 @@ public class MainMenuUI : MonoBehaviour
 
     private void OnSandboxModeButtonClicked()
     {
-        Debug.Log("Sandbox Mode!");
+        SceneManager.LoadScene("Sandbox");
     }
 
     private void OnRegularModeButtonClicked()
