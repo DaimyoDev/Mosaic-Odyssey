@@ -9,9 +9,9 @@ public class TerrainGeneration : MonoBehaviour
     [SerializeField] public int height = 10;  // Maximum height of the terrain
     [SerializeField] public float scale = 20f;  // Scale for Perlin noise
     [SerializeField] public int cubeSize = 1; //Size of each cube
-    [SerializeField] public float renderDistance = 50f;
+    //[SerializeField] public float renderDistance = 50f;
     [SerializeField] public GameObject voxelPrefab;
-    [SerializeField] public Camera mainCamera;
+    //[SerializeField] public Camera mainCamera;
     [SerializeField] int chunkSize = 10;
 
 
@@ -110,4 +110,11 @@ public class Voxel
         Position = position;
         Height = height;
     }
+}
+
+public class Chunk
+{
+    public int[,,] VoxelData;
+    public GameObject ChunkObject;
+    public Mesh Mesh;
 }
