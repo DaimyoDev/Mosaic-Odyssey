@@ -11,7 +11,7 @@ public class Player : MonoBehaviour
 
     private Vector3 PlayerMovement;
     private Vector2 MouseMovement;
-    private float groundCheckDistance = 1.5f;
+    private float groundCheckDistance = 1.2f;
     private float xRotation = 0f;
 
     private void Awake()
