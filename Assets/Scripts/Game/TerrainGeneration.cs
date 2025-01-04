@@ -4,11 +4,11 @@ using UnityEngine;
 public class TerrainGeneration : MonoBehaviour
 {
 
-    [SerializeField] int width;  // Width of the terrain
-    [SerializeField] public int length;  // Length of the terrain
-    [SerializeField] public int height;  // Maximum height of the terrain
-    [SerializeField] public float scale;  // Scale for Perlin noise
-    [SerializeField] public int cubeSize; //Size of each cube
+    [SerializeField] int width;
+    [SerializeField] public int length;
+    [SerializeField] public int height;
+    [SerializeField] public float scale;
+    [SerializeField] public int cubeSize;
     //[SerializeField] public float renderDistance = 50f;
     [SerializeField] public GameObject voxelPrefab;
     //[SerializeField] public Camera mainCamera;
@@ -31,7 +31,6 @@ public class TerrainGeneration : MonoBehaviour
         Plains
     }
 
-    // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
         seed = Random.Range(0, 10000);
@@ -45,7 +44,6 @@ public class TerrainGeneration : MonoBehaviour
     {
         if (chunkQueue.Count > 0 && !isGenerating)
         {
-            // Start generating the next chunk in the queue
             Vector2Int chunkCoords = chunkQueue.Dequeue();
             isGenerating = true;
             GenerateChunk(chunkCoords.x, chunkCoords.y);
@@ -55,22 +53,73 @@ public class TerrainGeneration : MonoBehaviour
     float GeneratePerlinNoise(float x, float z, int octaves, float persistence, float frequency, float lacunarity, float amplitude, int chunkX, int chunkZ, float scale)
     {
         float total = 0;
-        float maxAmplitude = 0;
 
+        float offsetX = seed * 0.2f;
+        float offsetZ = seed * 0.3f;
+
+        float biomeFrequency = 0.002f;
+        float biomeNoise = Mathf.PerlinNoise((x + chunkX * chunkSize + offsetX) * biomeFrequency, (z + chunkZ * chunkSize + offsetZ) * biomeFrequency);
+
+        biomeNoise -= 0.5f;
+        biomeNoise = Mathf.Clamp01(biomeNoise);
+
+
+        float plainsWeight = Mathf.SmoothStep(1.0f, 0.0f, biomeNoise * 1.7f);
+        float hillsWeight = Mathf.SmoothStep(0.25f, 1.0f, biomeNoise * 0.8f);
+        float mountainsWeight = Mathf.SmoothStep(0.75f, 1.0f, biomeNoise);
+        mountainsWeight *= 0.05f;
+
+        float totalWeight = plainsWeight + hillsWeight + mountainsWeight;
+        plainsWeight /= totalWeight;
+        hillsWeight /= totalWeight;
+        mountainsWeight /= totalWeight;
+        Mathf.Clamp01(totalWeight);
+
+        float plainsFrequency = 0.00000002f;
+        float plainsAmplitude = 0.005f;
+        float hillsFrequency = 0.00000002f;
+        float hillsAmplitude = 0.15f;
+        float mountainsFrequency = 0.000002f;
+        float mountainsAmplitude = 1.3f;
+
+
+        float plainsHeight = 0;
+        float currentFrequency = plainsFrequency;
+        float currentAmplitude = plainsAmplitude;
         for (int i = 0; i < octaves; i++)
         {
-            float offsetX = seed * 0.2f;
-            float offsetZ = seed * 0.3f;
-
-            total += Mathf.PerlinNoise((x + chunkX * chunkSize + offsetX) * frequency, (z + chunkZ * chunkSize + offsetZ) * frequency) * amplitude;
-            maxAmplitude += amplitude;
-            amplitude *= persistence;
-            frequency *= lacunarity;
+            plainsHeight += Mathf.PerlinNoise((x + chunkX * chunkSize + offsetX) * currentFrequency,
+                                              (z + chunkZ * chunkSize + offsetZ) * currentFrequency) * currentAmplitude;
+            currentFrequency *= lacunarity;
+            currentAmplitude *= persistence;
         }
 
-        float baseHeight = total / maxAmplitude;
+        float hillsHeight = 0;
+        currentFrequency = hillsFrequency;
+        currentAmplitude = hillsAmplitude;
+        for (int i = 0; i < octaves; i++)
+        {
+            hillsHeight += Mathf.PerlinNoise((x + chunkX * chunkSize + offsetX) * currentFrequency,
+                                             (z + chunkZ * chunkSize + offsetZ) * currentFrequency) * currentAmplitude;
+            currentFrequency *= lacunarity;
+            currentAmplitude *= persistence;
+        }
 
-        return total / maxAmplitude;
+        float mountainsHeight = 0;
+        currentFrequency = mountainsFrequency * 25f;
+        currentAmplitude = mountainsAmplitude * 5f;
+        for (int i = 0; i < octaves; i++)
+        {
+            mountainsHeight += Mathf.PerlinNoise((x + chunkX * chunkSize + offsetX) * currentFrequency,
+                                             (z + chunkZ * chunkSize + offsetZ) * currentFrequency) * currentAmplitude;
+            currentFrequency *= lacunarity;
+            currentAmplitude *= persistence;
+        }
+
+        total = plainsHeight * plainsWeight + hillsHeight * hillsWeight + mountainsHeight * mountainsWeight;
+        total -= 0.4f;
+
+        return total;
     }
 
     void GenerateTerrain()
@@ -97,10 +146,7 @@ public class TerrainGeneration : MonoBehaviour
         {
             for (int z = 0; z < chunkSize; z++)
             {
-
-                float chosenBiome = GeneratePerlinNoise(x, z, 1, 0.2f, 0.0001f, 2.0f, 0.0001f, chunkX, chunkZ, scale) * height;
-                //call function to select biome. There will be a function for each biome generation and smoothing.
-                float rawHeight = GeneratePerlinNoise(x, z, 4, 1.0f, 0.0005f, 2.0f, 0.0030f, chunkX, chunkZ, scale) * height;
+                float rawHeight = GeneratePerlinNoise(x, z, 6, 1.0f, 0.0005f, 2.6f, 0.0030f, chunkX, chunkZ, scale) * height;
                 rawHeight = Mathf.Clamp( rawHeight, 0, height);
                 float terrainHeight = Mathf.Clamp(Mathf.FloorToInt(rawHeight / cubeSize), 0, height - 1);
 
