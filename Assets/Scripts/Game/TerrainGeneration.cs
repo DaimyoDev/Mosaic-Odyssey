@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using UnityEngine.Splines;
 using UnityEngine;
 
 public class TerrainGeneration : MonoBehaviour
@@ -50,42 +51,17 @@ public class TerrainGeneration : MonoBehaviour
         }
     }
 
-    float GeneratePerlinNoise(float x, float z, int octaves, float persistence, float frequency, float lacunarity, float amplitude, int chunkX, int chunkZ, float scale)
+    float GeneratePerlinNoise(float x, float z, int octaves, float persistence, float frequency, float lacunarity, float amplitude, int chunkX, int chunkZ)
     {
-        float total = 0;
+        float total;
 
-        float offsetX = seed * 0.2f;
+        float offsetX = seed * 0.3f;
         float offsetZ = seed * 0.3f;
 
-        float biomeFrequency = 0.002f;
-        float biomeNoise = Mathf.PerlinNoise((x + chunkX * chunkSize + offsetX) * biomeFrequency, (z + chunkZ * chunkSize + offsetZ) * biomeFrequency);
-
-        biomeNoise -= 0.5f;
-        biomeNoise = Mathf.Clamp01(biomeNoise);
-
-
-        float plainsWeight = Mathf.SmoothStep(1.0f, 0.0f, biomeNoise * 1.7f);
-        float hillsWeight = Mathf.SmoothStep(0.25f, 1.0f, biomeNoise * 0.8f);
-        float mountainsWeight = Mathf.SmoothStep(0.75f, 1.0f, biomeNoise);
-        mountainsWeight *= 0.05f;
-
-        float totalWeight = plainsWeight + hillsWeight + mountainsWeight;
-        plainsWeight /= totalWeight;
-        hillsWeight /= totalWeight;
-        mountainsWeight /= totalWeight;
-        Mathf.Clamp01(totalWeight);
-
-        float plainsFrequency = 0.00000002f;
-        float plainsAmplitude = 0.005f;
-        float hillsFrequency = 0.00000002f;
-        float hillsAmplitude = 0.15f;
-        float mountainsFrequency = 0.000002f;
-        float mountainsAmplitude = 1.3f;
-
-
         float plainsHeight = 0;
-        float currentFrequency = plainsFrequency;
-        float currentAmplitude = plainsAmplitude;
+        float currentFrequency = frequency;
+        float currentAmplitude = amplitude;
+
         for (int i = 0; i < octaves; i++)
         {
             plainsHeight += Mathf.PerlinNoise((x + chunkX * chunkSize + offsetX) * currentFrequency,
@@ -94,41 +70,23 @@ public class TerrainGeneration : MonoBehaviour
             currentAmplitude *= persistence;
         }
 
-        float hillsHeight = 0;
-        currentFrequency = hillsFrequency;
-        currentAmplitude = hillsAmplitude;
-        for (int i = 0; i < octaves; i++)
-        {
-            hillsHeight += Mathf.PerlinNoise((x + chunkX * chunkSize + offsetX) * currentFrequency,
-                                             (z + chunkZ * chunkSize + offsetZ) * currentFrequency) * currentAmplitude;
-            currentFrequency *= lacunarity;
-            currentAmplitude *= persistence;
-        }
-
-        float mountainsHeight = 0;
-        currentFrequency = mountainsFrequency * 25f;
-        currentAmplitude = mountainsAmplitude * 5f;
-        for (int i = 0; i < octaves; i++)
-        {
-            mountainsHeight += Mathf.PerlinNoise((x + chunkX * chunkSize + offsetX) * currentFrequency,
-                                             (z + chunkZ * chunkSize + offsetZ) * currentFrequency) * currentAmplitude;
-            currentFrequency *= lacunarity;
-            currentAmplitude *= persistence;
-        }
-
-        total = plainsHeight * plainsWeight + hillsHeight * hillsWeight + mountainsHeight * mountainsWeight;
-        total -= 0.4f;
+        total = plainsHeight;
 
         return total;
     }
 
     void GenerateTerrain()
     {
-        for (int x = 0; x < chunkCountX; x++)
+        for (int sum = 0; sum < chunkCountX + chunkCountZ - 1; sum++)
         {
-            for (int z = 0; z < chunkCountZ; z++)
+            for (int x = 0; x <= sum; x++)
             {
-                chunkQueue.Enqueue(new Vector2Int(x, z));
+                int z = sum - x;
+
+                if (x < chunkCountX && z < chunkCountZ)
+                {
+                    chunkQueue.Enqueue(new Vector2Int(x, z));
+                }
             }
         }
     }
@@ -142,26 +100,57 @@ public class TerrainGeneration : MonoBehaviour
             ChunkObject = new GameObject($"Chunk_{chunkX}_{chunkZ}")
         };
 
+        float[,] noiseMap = new float[chunkSize, chunkSize];
+        float[,] hillsMaskMap = new float[chunkSize, chunkSize];
+        float[,] mountainMaskMap = new float[chunkSize, chunkSize];
+        int waterLevel = 70;
+
         for (int x = 0; x < chunkSize; x++)
         {
             for (int z = 0; z < chunkSize; z++)
             {
-                float rawHeight = GeneratePerlinNoise(x, z, 6, 1.0f, 0.0005f, 2.6f, 0.0030f, chunkX, chunkZ, scale) * height;
-                rawHeight = Mathf.Clamp( rawHeight, 0, height);
+                // Compute plains noise
+                noiseMap[x, z] = GeneratePerlinNoise(x, z, 4, 0.3f, 0.001f, 0.001f, 0.25f, chunkX, chunkZ);
+
+                // Compute hills mask
+                hillsMaskMap[x, z] = Mathf.PerlinNoise((x + chunkX * chunkSize + (seed * 0.3f)) * 0.0023f,
+                                                       (z + chunkZ * chunkSize + (seed * 0.3f)) * 0.0023f);
+                hillsMaskMap[x, z] = Mathf.Clamp01((hillsMaskMap[x, z] - 0.45f) / 0.3f);
+
+                mountainMaskMap[x, z] = Mathf.PerlinNoise((x + chunkX * chunkSize + (seed * 0.5f)) * 0.002f,
+                                                      (z + chunkZ * chunkSize + (seed * 0.5f)) * 0.002f);
+                mountainMaskMap[x, z] = Mathf.Clamp01((mountainMaskMap[x, z] - 0.65f) / 0.2f);
+            }
+        }
+
+        for (int x = 0; x < chunkSize; x++)
+        {
+            for (int z = 0; z < chunkSize; z++)
+            {
+                float plainsNoise = noiseMap[x, z];
+                float hillsNoise = GeneratePerlinNoise(x, z, 6, 0.7f, 0.0024f, 1.2f, 0.1f, chunkX, chunkZ);
+                hillsNoise = Mathf.Pow(hillsNoise, 1);
+                float mountainNoise = GeneratePerlinNoise(x, z, 8, 0.92f, 0.0025f, 1.3f, 0.25f, chunkX, chunkZ);
+                mountainNoise = Mathf.Pow(mountainNoise, 2.5f);
+                float blendedNoise = Mathf.Lerp(plainsNoise, plainsNoise + hillsNoise, hillsMaskMap[x, z]);
+                blendedNoise = Mathf.Lerp(blendedNoise, blendedNoise + mountainNoise, mountainMaskMap[x, z]);
+
+                float rawHeight = blendedNoise * height;
+                rawHeight = Mathf.Clamp(rawHeight, 0, height);
                 float terrainHeight = Mathf.Clamp(Mathf.FloorToInt(rawHeight / cubeSize), 0, height - 1);
 
                 for (int y = 0; y < height; y++)
                 {
                     if (y <= terrainHeight)
                     {
+                        // Solid terrain
                         chunk.VoxelData[x, y, z] = 1;
-
                     }
                     else
                     {
+                        // Air or empty space above the water level
                         chunk.VoxelData[x, y, z] = 0;
                     }
-                    
                 }
             }
         }
@@ -169,6 +158,7 @@ public class TerrainGeneration : MonoBehaviour
         chunk.ChunkObject.transform.position = chunkOrigin;
         chunk.ChunkObject.AddComponent<MeshFilter>();
         chunk.ChunkObject.AddComponent<MeshRenderer>().material = voxelPrefab.GetComponent<MeshRenderer>().sharedMaterial;
+        chunk.ChunkObject.AddComponent<MeshCollider>();
 
         chunkVoxels[new Vector2Int(chunkX, chunkZ)] = chunk;
 
@@ -180,6 +170,10 @@ public class TerrainGeneration : MonoBehaviour
         int[,,] voxelData = chunk.VoxelData;
         List<Vector3> vertices = new List<Vector3>();
         List<int> triangles = new List<int>();
+        List<Vector2> uvs = new List<Vector2>();
+
+        List<Vector3> waterVertices = new List<Vector3>();
+        List<int> waterTriangles = new List<int>();
 
         bool[,,] visited = new bool[chunkSize, height, chunkSize];
 
@@ -191,6 +185,7 @@ public class TerrainGeneration : MonoBehaviour
                 {
                     if (voxelData[x, y, z] == 1 && !visited[x, y, z])
                     {
+                        bool isWater = voxelData[x, y, z] == 2;
                         int width = 1, depth = 1;
 
                         while (x + width < chunkSize && voxelData[x + width, y, z] == 1 && !visited[x + width, y, z])
@@ -214,143 +209,10 @@ public class TerrainGeneration : MonoBehaviour
                             depth++;
                         }
 
-                        // **Bottom Face**: (Check if the voxel below is out of bounds or empty)
-                        if (y == 0 || voxelData[x, y - 1, z] == 0)
-                        {
-                            Vector3 bottomBottomLeft = new Vector3(x, y, z);
-                            Vector3 bottomBottomRight = new Vector3(x + width, y, z);
-                            Vector3 bottomTopLeft = new Vector3(x, y, z + depth);
-                            Vector3 bottomTopRight = new Vector3(x + width, y, z + depth);
-
-                            int bottomStartIndex = vertices.Count;
-                            vertices.Add(bottomBottomLeft);
-                            vertices.Add(bottomBottomRight);
-                            vertices.Add(bottomTopLeft);
-                            vertices.Add(bottomTopRight);
-
-                            // Add triangles for bottom face
-                            triangles.Add(bottomStartIndex);     // bottom-left
-                            triangles.Add(bottomStartIndex + 2); // top-left
-                            triangles.Add(bottomStartIndex + 1); // bottom-right
-                            triangles.Add(bottomStartIndex + 1); // bottom-right
-                            triangles.Add(bottomStartIndex + 2); // top-left
-                            triangles.Add(bottomStartIndex + 3); // top-right
-                        }
-
-                        // **Top Face**: (Check if the voxel above is out of bounds or empty)
-                        if (voxelData[x, y, z] == 1)
-                        {
-                            Vector3 topBottomLeft = new Vector3(x, y + 1, z);
-                            Vector3 topBottomRight = new Vector3(x + width, y + 1, z);
-                            Vector3 topTopLeft = new Vector3(x, y + 1, z + depth);
-                            Vector3 topTopRight = new Vector3(x + width, y + 1, z + depth);
-
-                            int topStartIndex = vertices.Count;
-                            vertices.Add(topBottomLeft);
-                            vertices.Add(topBottomRight);
-                            vertices.Add(topTopLeft);
-                            vertices.Add(topTopRight);
-
-                            // Add triangles for top face
-                            triangles.Add(topStartIndex);     // bottom-left
-                            triangles.Add(topStartIndex + 2); // top-left
-                            triangles.Add(topStartIndex + 1); // bottom-right
-                            triangles.Add(topStartIndex + 1); // bottom-right
-                            triangles.Add(topStartIndex + 2); // top-left
-                            triangles.Add(topStartIndex + 3); // top-right
-                        }
-
-                        // Left Face (Check if the voxel on the left is empty or out of bounds)
-                        if (x == 0 || voxelData[x - 1, y, z] == 0)
-                        {
-                            Vector3 leftBottomLeft = new Vector3(x, y, z);
-                            Vector3 leftBottomRight = new Vector3(x, y, z + depth);
-                            Vector3 leftTopLeft = new Vector3(x, y + 1, z);
-                            Vector3 leftTopRight = new Vector3(x, y + 1, z + depth);
-
-                            int leftStartIndex = vertices.Count;
-                            vertices.Add(leftBottomLeft);
-                            vertices.Add(leftBottomRight);
-                            vertices.Add(leftTopLeft);
-                            vertices.Add(leftTopRight);
-
-                            // Add triangles for left face
-                            triangles.Add(leftStartIndex);     // bottom-left
-                            triangles.Add(leftStartIndex + 2); // top-left
-                            triangles.Add(leftStartIndex + 1); // bottom-right
-                            triangles.Add(leftStartIndex + 1); // bottom-right
-                            triangles.Add(leftStartIndex + 2); // top-left
-                            triangles.Add(leftStartIndex + 3); // top-right
-                        }
-
-                        //Right face (Check if the voxel on the right is empty or out of bounds)
-                        if (x + width == chunkSize || voxelData[x + width, y, z] == 0)
-                        {
-                            Vector3 rightBottomLeft = new Vector3(x + width, y, z);
-                            Vector3 rightBottomRight = new Vector3(x + width, y, z + depth);
-                            Vector3 rightTopLeft = new Vector3(x + width, y + 1, z);
-                            Vector3 rightTopRight = new Vector3(x + width, y + 1, z + depth);
-
-                            int rightStartIndex = vertices.Count;
-                            vertices.Add(rightBottomLeft);
-                            vertices.Add(rightBottomRight);
-                            vertices.Add(rightTopLeft);
-                            vertices.Add(rightTopRight);
-
-                            // Add triangles for right face
-                            triangles.Add(rightStartIndex);     // bottom-left
-                            triangles.Add(rightStartIndex + 2); // top-left
-                            triangles.Add(rightStartIndex + 1); // bottom-right
-                            triangles.Add(rightStartIndex + 1); // bottom-right
-                            triangles.Add(rightStartIndex + 2); // top-left
-                            triangles.Add(rightStartIndex + 3); // top-right
-                        }
-
-                        // Front Face (Check if the voxel in front is empty or out of bounds)
-                        if (z == 0 || voxelData[x, y, z - 1] == 0)
-                        {
-                            Vector3 frontBottomLeft = new Vector3(x, y, z);
-                            Vector3 frontBottomRight = new Vector3(x + width, y, z);
-                            Vector3 frontTopLeft = new Vector3(x, y + 1, z);
-                            Vector3 frontTopRight = new Vector3(x + width, y + 1, z);
-
-                            int frontStartIndex = vertices.Count;
-                            vertices.Add(frontBottomLeft);
-                            vertices.Add(frontBottomRight);
-                            vertices.Add(frontTopLeft);
-                            vertices.Add(frontTopRight);
-
-                            // Add triangles for front face
-                            triangles.Add(frontStartIndex);     // bottom-left
-                            triangles.Add(frontStartIndex + 2); // top-left
-                            triangles.Add(frontStartIndex + 1); // bottom-right
-                            triangles.Add(frontStartIndex + 1); // bottom-right
-                            triangles.Add(frontStartIndex + 2); // top-left
-                            triangles.Add(frontStartIndex + 3); // top-right
-                        }
-
-                        // Back Face (Check if the voxel in the back is empty or out of bounds)
-                        if (z + depth == chunkSize || voxelData[x, y, z + depth] == 0 || voxelData[x, y, z + depth] == 1)
-                        {
-                            Vector3 backBottomLeft = new Vector3(x, y, z + depth);
-                            Vector3 backBottomRight = new Vector3(x + width, y, z + depth);
-                            Vector3 backTopLeft = new Vector3(x, y + 1, z + depth);
-                            Vector3 backTopRight = new Vector3(x + width, y + 1, z + depth);
-
-                            int backStartIndex = vertices.Count;
-                            vertices.Add(backBottomLeft);
-                            vertices.Add(backBottomRight);
-                            vertices.Add(backTopLeft);
-                            vertices.Add(backTopRight);
-
-                            // Add triangles for back face
-                            triangles.Add(backStartIndex);     // bottom-left
-                            triangles.Add(backStartIndex + 2); // top-left
-                            triangles.Add(backStartIndex + 1); // bottom-right
-                            triangles.Add(backStartIndex + 1); // bottom-right
-                            triangles.Add(backStartIndex + 2); // top-left
-                            triangles.Add(backStartIndex + 3); // top-right
-                        }
+                        GenerateFaces(x, y, z, width, depth,
+                            isWater ? waterVertices : vertices,
+                            isWater ? waterTriangles : triangles,
+                            uvs, voxelData, isWater);
 
                         for (int i = x; i < x + width; i++)
                             for (int j = z; j < z + depth; j++)
@@ -363,8 +225,151 @@ public class TerrainGeneration : MonoBehaviour
         mesh.vertices = vertices.ToArray();
         mesh.triangles = triangles.ToArray();
         mesh.RecalculateNormals();
+        mesh.RecalculateBounds();
         chunk.Mesh = mesh;
         chunk.ChunkObject.GetComponent<MeshFilter>().mesh = mesh;
+        chunk.ChunkObject.GetComponent<MeshCollider>().sharedMesh = mesh;
+    }
+    void GenerateFaces(int x, int y, int z, int width, int depth, List<Vector3> vertices, List<int> triangles, List<Vector2> uvs, int[,,] voxelData, bool isWater)
+    {
+        bool isCurrentBlockWater = voxelData[x, y, z] == 2;
+        // **Bottom Face**: (Check if the voxel below is out of bounds or empty)
+        if (y == 0 || voxelData[x, y - 1, z] == 0)
+        {
+            Vector3 bottomBottomLeft = new Vector3(x, y, z);
+            Vector3 bottomBottomRight = new Vector3(x + width, y, z);
+            Vector3 bottomTopLeft = new Vector3(x, y, z + depth);
+            Vector3 bottomTopRight = new Vector3(x + width, y, z + depth);
+
+            int bottomStartIndex = vertices.Count;
+            vertices.Add(bottomBottomLeft);
+            vertices.Add(bottomBottomRight);
+            vertices.Add(bottomTopLeft);
+            vertices.Add(bottomTopRight);
+
+            // Add triangles for bottom face
+            triangles.Add(bottomStartIndex);     // bottom-left
+            triangles.Add(bottomStartIndex + 2); // top-left
+            triangles.Add(bottomStartIndex + 1); // bottom-right
+            triangles.Add(bottomStartIndex + 1); // bottom-right
+            triangles.Add(bottomStartIndex + 2); // top-left
+            triangles.Add(bottomStartIndex + 3); // top-right
+        }
+
+        // **Top Face**: (Check if the voxel above is out of bounds or empty)
+        if (voxelData[x, y, z] == 1)
+        {
+            Vector3 topBottomLeft = new Vector3(x, y + 1, z);
+            Vector3 topBottomRight = new Vector3(x + width, y + 1, z);
+            Vector3 topTopLeft = new Vector3(x, y + 1, z + depth);
+            Vector3 topTopRight = new Vector3(x + width, y + 1, z + depth);
+
+            int topStartIndex = vertices.Count;
+            vertices.Add(topBottomLeft);
+            vertices.Add(topBottomRight);
+            vertices.Add(topTopLeft);
+            vertices.Add(topTopRight);
+
+            // Add triangles for top face
+            triangles.Add(topStartIndex);     // bottom-left
+            triangles.Add(topStartIndex + 2); // top-left
+            triangles.Add(topStartIndex + 1); // bottom-right
+            triangles.Add(topStartIndex + 1); // bottom-right
+            triangles.Add(topStartIndex + 2); // top-left
+            triangles.Add(topStartIndex + 3); // top-right
+        }
+
+        // Left Face (Check if the voxel on the left is empty or out of bounds)
+        if (x == 0 || voxelData[x - 1, y, z] == 0)
+        {
+            Vector3 leftBottomLeft = new Vector3(x, y, z);
+            Vector3 leftBottomRight = new Vector3(x, y, z + depth);
+            Vector3 leftTopLeft = new Vector3(x, y + 1, z);
+            Vector3 leftTopRight = new Vector3(x, y + 1, z + depth);
+
+            int leftStartIndex = vertices.Count;
+            vertices.Add(leftBottomLeft);
+            vertices.Add(leftBottomRight);
+            vertices.Add(leftTopLeft);
+            vertices.Add(leftTopRight);
+
+            // Add triangles for left face
+            triangles.Add(leftStartIndex);     // bottom-left
+            triangles.Add(leftStartIndex + 2); // top-left
+            triangles.Add(leftStartIndex + 1); // bottom-right
+            triangles.Add(leftStartIndex + 1); // bottom-right
+            triangles.Add(leftStartIndex + 2); // top-left
+            triangles.Add(leftStartIndex + 3); // top-right
+        }
+
+        //Right face (Check if the voxel on the right is empty or out of bounds)
+        if (x + width == chunkSize || voxelData[x + width, y, z] == 0)
+        {
+            Vector3 rightBottomLeft = new Vector3(x + width, y, z);
+            Vector3 rightBottomRight = new Vector3(x + width, y, z + depth);
+            Vector3 rightTopLeft = new Vector3(x + width, y + 1, z);
+            Vector3 rightTopRight = new Vector3(x + width, y + 1, z + depth);
+
+            int rightStartIndex = vertices.Count;
+            vertices.Add(rightBottomLeft);
+            vertices.Add(rightBottomRight);
+            vertices.Add(rightTopLeft);
+            vertices.Add(rightTopRight);
+
+            // Add triangles for right face
+            triangles.Add(rightStartIndex);     // bottom-left
+            triangles.Add(rightStartIndex + 2); // top-left
+            triangles.Add(rightStartIndex + 1); // bottom-right
+            triangles.Add(rightStartIndex + 1); // bottom-right
+            triangles.Add(rightStartIndex + 2); // top-left
+            triangles.Add(rightStartIndex + 3); // top-right
+        }
+
+        // Front Face (Check if the voxel in front is empty or out of bounds)
+        if (z == 0 || voxelData[x, y, z - 1] == 0)
+        {
+            Vector3 frontBottomLeft = new Vector3(x, y, z);
+            Vector3 frontBottomRight = new Vector3(x + width, y, z);
+            Vector3 frontTopLeft = new Vector3(x, y + 1, z);
+            Vector3 frontTopRight = new Vector3(x + width, y + 1, z);
+
+            int frontStartIndex = vertices.Count;
+            vertices.Add(frontBottomLeft);
+            vertices.Add(frontBottomRight);
+            vertices.Add(frontTopLeft);
+            vertices.Add(frontTopRight);
+
+            // Add triangles for front face
+            triangles.Add(frontStartIndex);     // bottom-left
+            triangles.Add(frontStartIndex + 2); // top-left
+            triangles.Add(frontStartIndex + 1); // bottom-right
+            triangles.Add(frontStartIndex + 1); // bottom-right
+            triangles.Add(frontStartIndex + 2); // top-left
+            triangles.Add(frontStartIndex + 3); // top-right
+        }
+
+        // Back Face (Check if the voxel in the back is empty or out of bounds)
+        if (z + depth == chunkSize || voxelData[x, y, z + depth] == 0 || voxelData[x, y, z + depth] == 1)
+        {
+            Vector3 backBottomLeft = new Vector3(x, y, z + depth);
+            Vector3 backBottomRight = new Vector3(x + width, y, z + depth);
+            Vector3 backTopLeft = new Vector3(x, y + 1, z + depth);
+            Vector3 backTopRight = new Vector3(x + width, y + 1, z + depth);
+
+            int backStartIndex = vertices.Count;
+            vertices.Add(backBottomLeft);
+            vertices.Add(backBottomRight);
+            vertices.Add(backTopLeft);
+            vertices.Add(backTopRight);
+
+            // Add triangles for back face
+            triangles.Add(backStartIndex);     // bottom-left
+            triangles.Add(backStartIndex + 2); // top-left
+            triangles.Add(backStartIndex + 1); // bottom-right
+            triangles.Add(backStartIndex + 1); // bottom-right
+            triangles.Add(backStartIndex + 2); // top-left
+            triangles.Add(backStartIndex + 3); // top-right
+        }
     }
 }
 
