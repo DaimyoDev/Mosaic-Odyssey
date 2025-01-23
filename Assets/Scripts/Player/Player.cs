@@ -4,7 +4,7 @@ public class Player : MonoBehaviour
 {
     [SerializeField] MovementSubscription GetInput;
     [SerializeField] Camera PlayerCamera;
-    [SerializeField] int mouseSensitivity;
+    [SerializeField] float mouseSensitivity;
     [SerializeField] int speed;
     [SerializeField] int jumpPower;
     Rigidbody rb;
@@ -55,8 +55,8 @@ public class Player : MonoBehaviour
     {
         MouseMovement = new Vector2(GetInput.MouseMove.x, GetInput.MouseMove.y);
 
-        float mouseX = MouseMovement.x * mouseSensitivity * Time.deltaTime;
-        float mouseY = MouseMovement.y * mouseSensitivity * Time.deltaTime;
+        float mouseX = MouseMovement.x * mouseSensitivity;
+        float mouseY = MouseMovement.y * mouseSensitivity;
 
         xRotation -= mouseY;
         xRotation = Mathf.Clamp(xRotation, -90f, 90f);

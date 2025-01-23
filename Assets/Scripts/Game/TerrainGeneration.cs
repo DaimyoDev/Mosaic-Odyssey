@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using UnityEngine.Splines;
 using UnityEngine;
 
 public class TerrainGeneration : MonoBehaviour
@@ -34,7 +33,7 @@ public class TerrainGeneration : MonoBehaviour
 
     void Start()
     {
-        seed = Random.Range(0, 10000);
+        seed = Random.Range(1, 100000);
         Random.InitState(seed);
         chunkCountX = Mathf.CeilToInt((float)width / chunkSize);
         chunkCountZ = Mathf.CeilToInt((float)length / chunkSize);
@@ -103,7 +102,7 @@ public class TerrainGeneration : MonoBehaviour
         float[,] noiseMap = new float[chunkSize, chunkSize];
         float[,] hillsMaskMap = new float[chunkSize, chunkSize];
         float[,] mountainMaskMap = new float[chunkSize, chunkSize];
-        int waterLevel = 70;
+        //int waterLevel = 70;
 
         for (int x = 0; x < chunkSize; x++)
         {
@@ -146,11 +145,15 @@ public class TerrainGeneration : MonoBehaviour
                         // Solid terrain
                         chunk.VoxelData[x, y, z] = 1;
                     }
+                    //else if (y <= waterLevel)
+                    //{
+                        //chunk.VoxelData[x, y, z] = 2;
+                    //}
                     else
                     {
                         // Air or empty space above the water level
                         chunk.VoxelData[x, y, z] = 0;
-                    }
+                    }  
                 }
             }
         }
@@ -170,53 +173,85 @@ public class TerrainGeneration : MonoBehaviour
         int[,,] voxelData = chunk.VoxelData;
         List<Vector3> vertices = new List<Vector3>();
         List<int> triangles = new List<int>();
-        List<Vector2> uvs = new List<Vector2>();
-
-        List<Vector3> waterVertices = new List<Vector3>();
-        List<int> waterTriangles = new List<int>();
+        List<Color> colors = new List<Color>();
 
         bool[,,] visited = new bool[chunkSize, height, chunkSize];
 
         for (int x = 0; x < chunkSize; x++)
         {
-            for (int y = 0; y < height; y++)
+            for (int z = 0; z < chunkSize; z++)
             {
-                for (int z = 0; z < chunkSize; z++)
+                for (int y = 0; y < height; y++)
                 {
                     if (voxelData[x, y, z] == 1 && !visited[x, y, z])
                     {
-                        bool isWater = voxelData[x, y, z] == 2;
-                        int width = 1, depth = 1;
+                        int width = 1, depth = 1, maxHeight = 0;
+
+                        while (y + maxHeight < height && voxelData[x, y + maxHeight, z] == 1 && !visited[x, y + maxHeight, z])
+                        {
+                            bool isValidHeight = true;
+                            for (int dx = x; dx < x + width; dx++)
+                            {
+                                for (int dz = z; dz < z + depth; dz++)
+                                {
+                                    if (voxelData[dx, y + maxHeight, dz] != 1 || visited[dx, y + maxHeight, dz])
+                                    {
+                                        isValidHeight = false;
+                                        break;
+                                    }
+                                }
+                                if (!isValidHeight) break;
+                            }
+                            if (isValidHeight) maxHeight++;
+                            else break;
+                        }
 
                         while (x + width < chunkSize && voxelData[x + width, y, z] == 1 && !visited[x + width, y, z])
-                            width++;
-
-                        while (z + depth < chunkSize)
                         {
-                            bool isRowValid = true;
-                            for (int i = x; i < x + width; i++)
+                            bool isValidWidth = true;
+                            for (int dy = y; dy < y + maxHeight; dy++)
                             {
-                                if (voxelData[i, y, z + depth] != 1 || visited[i, y, z + depth])
+                                if (voxelData[x + width, dy, z] != 1 || visited[x + width, dy, z])
                                 {
-                                    isRowValid = false;
+                                    isValidWidth = false;
                                     break;
                                 }
                             }
-
-                            if (!isRowValid)
-                                break;
-
-                            depth++;
+                            if (isValidWidth) width++;
+                            else break;
                         }
 
-                        GenerateFaces(x, y, z, width, depth,
-                            isWater ? waterVertices : vertices,
-                            isWater ? waterTriangles : triangles,
-                            uvs, voxelData, isWater);
+                        while (z + depth < chunkSize && voxelData[x, y, z + depth] == 1 && !visited[x, y, z + depth])
+                        {
+                            bool isValidDepth = true;
+                            for (int dx = x; dx < x + width; dx++)
+                            {
+                                for (int dy = y; dy < y + maxHeight; dy++)
+                                {
+                                    if (voxelData[dx, dy, z + depth] != 1 || visited[dx, dy, z + depth])
+                                    {
+                                        isValidDepth = false;
+                                        break;
+                                    }
+                                }
+                                if (!isValidDepth) break;
+                            }
+                            if (isValidDepth) depth++;
+                            else break;
+                        }
+
+                        GenerateFaces(x, y, z, width, depth, maxHeight, vertices, triangles, colors, voxelData);
 
                         for (int i = x; i < x + width; i++)
-                            for (int j = z; j < z + depth; j++)
-                                visited[i, y, j] = true;
+                        {
+                            for (int j = y; j < y + maxHeight; j++)
+                            {
+                                for (int k = z; k < z + depth; k++)
+                                {
+                                    visited[i, j, k] = true;
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -224,17 +259,27 @@ public class TerrainGeneration : MonoBehaviour
         Mesh mesh = new Mesh();
         mesh.vertices = vertices.ToArray();
         mesh.triangles = triangles.ToArray();
+        mesh.colors = colors.ToArray();
         mesh.RecalculateNormals();
         mesh.RecalculateBounds();
         chunk.Mesh = mesh;
         chunk.ChunkObject.GetComponent<MeshFilter>().mesh = mesh;
         chunk.ChunkObject.GetComponent<MeshCollider>().sharedMesh = mesh;
     }
-    void GenerateFaces(int x, int y, int z, int width, int depth, List<Vector3> vertices, List<int> triangles, List<Vector2> uvs, int[,,] voxelData, bool isWater)
+    void GenerateFaces(int x, int y, int z, int width, int depth, int maxHeight, List<Vector3> vertices, List<int> triangles, List<Color> colors, int[,,] voxelData)
     {
-        bool isCurrentBlockWater = voxelData[x, y, z] == 2;
+        Color green = new Color(0.1f, 0.3f, 0.1f, 1.0f);
+        Color vertexColor = green;
+
+        Color GetColorForHeight(int height)
+        {
+            if (height < 200) return green;
+            if (height < 400) return Color.gray;
+            return Color.white;
+        }
+
         // **Bottom Face**: (Check if the voxel below is out of bounds or empty)
-        if (y == 0 || voxelData[x, y - 1, z] == 0)
+        if (y == 0 || voxelData[x, y, z] == 0)
         {
             Vector3 bottomBottomLeft = new Vector3(x, y, z);
             Vector3 bottomBottomRight = new Vector3(x + width, y, z);
@@ -247,6 +292,11 @@ public class TerrainGeneration : MonoBehaviour
             vertices.Add(bottomTopLeft);
             vertices.Add(bottomTopRight);
 
+            for (int i = 0; i < 4; i++)
+            {
+                colors.Add(GetColorForHeight(y));
+            }
+
             // Add triangles for bottom face
             triangles.Add(bottomStartIndex);     // bottom-left
             triangles.Add(bottomStartIndex + 2); // top-left
@@ -256,19 +306,24 @@ public class TerrainGeneration : MonoBehaviour
             triangles.Add(bottomStartIndex + 3); // top-right
         }
 
-        // **Top Face**: (Check if the voxel above is out of bounds or empty)
-        if (voxelData[x, y, z] == 1)
+        // **Top Face**
+        if (voxelData[x, y + maxHeight, z] == 0 || voxelData[x, y + maxHeight, z] == 1)
         {
-            Vector3 topBottomLeft = new Vector3(x, y + 1, z);
-            Vector3 topBottomRight = new Vector3(x + width, y + 1, z);
-            Vector3 topTopLeft = new Vector3(x, y + 1, z + depth);
-            Vector3 topTopRight = new Vector3(x + width, y + 1, z + depth);
+            Vector3 topBottomLeft = new Vector3(x, y + maxHeight, z);
+            Vector3 topBottomRight = new Vector3(x + width, y + maxHeight, z);
+            Vector3 topTopLeft = new Vector3(x, y + maxHeight, z + depth);
+            Vector3 topTopRight = new Vector3(x + width, y + maxHeight, z + depth);
 
             int topStartIndex = vertices.Count;
             vertices.Add(topBottomLeft);
             vertices.Add(topBottomRight);
             vertices.Add(topTopLeft);
             vertices.Add(topTopRight);
+
+            for (int i = 0; i < 4; i++)
+            {
+                colors.Add(GetColorForHeight(y + maxHeight));
+            }
 
             // Add triangles for top face
             triangles.Add(topStartIndex);     // bottom-left
@@ -280,18 +335,23 @@ public class TerrainGeneration : MonoBehaviour
         }
 
         // Left Face (Check if the voxel on the left is empty or out of bounds)
-        if (x == 0 || voxelData[x - 1, y, z] == 0)
+        if (x == 0 || voxelData[x - 1, y, z] == 0 || voxelData[0, y, z] == 1)
         {
             Vector3 leftBottomLeft = new Vector3(x, y, z);
             Vector3 leftBottomRight = new Vector3(x, y, z + depth);
-            Vector3 leftTopLeft = new Vector3(x, y + 1, z);
-            Vector3 leftTopRight = new Vector3(x, y + 1, z + depth);
+            Vector3 leftTopLeft = new Vector3(x, y + maxHeight, z);
+            Vector3 leftTopRight = new Vector3(x, y + maxHeight, z + depth);
 
             int leftStartIndex = vertices.Count;
             vertices.Add(leftBottomLeft);
             vertices.Add(leftBottomRight);
             vertices.Add(leftTopLeft);
             vertices.Add(leftTopRight);
+
+            colors.Add(GetColorForHeight(y));
+            colors.Add(GetColorForHeight(y));
+            colors.Add(GetColorForHeight(y + maxHeight));
+            colors.Add(GetColorForHeight(y + maxHeight));
 
             // Add triangles for left face
             triangles.Add(leftStartIndex);     // bottom-left
@@ -303,18 +363,23 @@ public class TerrainGeneration : MonoBehaviour
         }
 
         //Right face (Check if the voxel on the right is empty or out of bounds)
-        if (x + width == chunkSize || voxelData[x + width, y, z] == 0)
+        if (x + width == chunkSize || voxelData[x + width, y, z] == 0 || voxelData[x + width, y, z] == 1)
         {
             Vector3 rightBottomLeft = new Vector3(x + width, y, z);
             Vector3 rightBottomRight = new Vector3(x + width, y, z + depth);
-            Vector3 rightTopLeft = new Vector3(x + width, y + 1, z);
-            Vector3 rightTopRight = new Vector3(x + width, y + 1, z + depth);
+            Vector3 rightTopLeft = new Vector3(x + width, y + maxHeight, z);
+            Vector3 rightTopRight = new Vector3(x + width, y + maxHeight, z + depth);
 
             int rightStartIndex = vertices.Count;
             vertices.Add(rightBottomLeft);
             vertices.Add(rightBottomRight);
             vertices.Add(rightTopLeft);
             vertices.Add(rightTopRight);
+
+            colors.Add(GetColorForHeight(y));
+            colors.Add(GetColorForHeight(y));
+            colors.Add(GetColorForHeight(y + maxHeight));
+            colors.Add(GetColorForHeight(y + maxHeight));
 
             // Add triangles for right face
             triangles.Add(rightStartIndex);     // bottom-left
@@ -326,18 +391,23 @@ public class TerrainGeneration : MonoBehaviour
         }
 
         // Front Face (Check if the voxel in front is empty or out of bounds)
-        if (z == 0 || voxelData[x, y, z - 1] == 0)
+        if (z == 0 || voxelData[x, y, z - 1] == 0 || voxelData[x, y, z - 1] == 1)
         {
             Vector3 frontBottomLeft = new Vector3(x, y, z);
             Vector3 frontBottomRight = new Vector3(x + width, y, z);
-            Vector3 frontTopLeft = new Vector3(x, y + 1, z);
-            Vector3 frontTopRight = new Vector3(x + width, y + 1, z);
+            Vector3 frontTopLeft = new Vector3(x, y + maxHeight, z);
+            Vector3 frontTopRight = new Vector3(x + width, y + maxHeight, z);
 
             int frontStartIndex = vertices.Count;
             vertices.Add(frontBottomLeft);
             vertices.Add(frontBottomRight);
             vertices.Add(frontTopLeft);
             vertices.Add(frontTopRight);
+
+            colors.Add(GetColorForHeight(y));
+            colors.Add(GetColorForHeight(y));
+            colors.Add(GetColorForHeight(y + maxHeight));
+            colors.Add(GetColorForHeight(y + maxHeight));
 
             // Add triangles for front face
             triangles.Add(frontStartIndex);     // bottom-left
@@ -349,18 +419,23 @@ public class TerrainGeneration : MonoBehaviour
         }
 
         // Back Face (Check if the voxel in the back is empty or out of bounds)
-        if (z + depth == chunkSize || voxelData[x, y, z + depth] == 0 || voxelData[x, y, z + depth] == 1)
+        if (z + depth == chunkSize || voxelData[x, y, z + depth] == 0 || voxelData[x, y, 0] == 1 || voxelData[x, y, z + depth] == 1)
         {
             Vector3 backBottomLeft = new Vector3(x, y, z + depth);
             Vector3 backBottomRight = new Vector3(x + width, y, z + depth);
-            Vector3 backTopLeft = new Vector3(x, y + 1, z + depth);
-            Vector3 backTopRight = new Vector3(x + width, y + 1, z + depth);
+            Vector3 backTopLeft = new Vector3(x, y + maxHeight, z + depth);
+            Vector3 backTopRight = new Vector3(x + width, y + maxHeight, z + depth);
 
             int backStartIndex = vertices.Count;
             vertices.Add(backBottomLeft);
             vertices.Add(backBottomRight);
             vertices.Add(backTopLeft);
             vertices.Add(backTopRight);
+
+            colors.Add(GetColorForHeight(y));
+            colors.Add(GetColorForHeight(y));
+            colors.Add(GetColorForHeight(y + maxHeight));
+            colors.Add(GetColorForHeight(y + maxHeight));
 
             // Add triangles for back face
             triangles.Add(backStartIndex);     // bottom-left
@@ -374,7 +449,7 @@ public class TerrainGeneration : MonoBehaviour
 }
 
 
-public class Voxel
+class Voxel
 {
     public Vector3 Position { get; private set; }
     public float Height { get; private set; }
@@ -386,7 +461,7 @@ public class Voxel
     }
 }
 
-public class Chunk
+class Chunk
 {
     public int[,,] VoxelData;
     public GameObject ChunkObject;

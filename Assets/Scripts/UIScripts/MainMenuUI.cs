@@ -42,12 +42,12 @@ public class MainMenuUI : MonoBehaviour
 
     private void OnRegularModeButtonClicked()
     {
-        Debug.Log("Regular Mode!");
+        SceneManager.LoadScene("RegularMode");
     }
 
     private void OnControlsButtonClicked()
     {
-        Debug.Log("Controls!");
+        SceneManager.LoadScene("Controls");
     }
 
     private void OnSettingsButtonClicked()
@@ -57,7 +57,7 @@ public class MainMenuUI : MonoBehaviour
 
     private void OnQuitButtonClicked()
     {
-        Debug.Log("Quit!");
+        Application.Quit();
     }
 
     private void OnColorPalettesButtonClicked()
