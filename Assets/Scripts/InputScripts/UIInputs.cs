@@ -21,6 +21,8 @@ public class UIInputs : MonoBehaviour
 
     private void OnInGameMenuPerformed(InputAction.CallbackContext context)
     {
-        Debug.Log("In game menu triggered!");
+        OnEscapePressed?.Invoke();
     }
+
+    public static event System.Action OnEscapePressed;
 }

@@ -1,8 +1,12 @@
+using Unity.VisualScripting;
 using UnityEngine;
+using UnityEngine.UIElements;
 
 public class Player : MonoBehaviour
 {
     [SerializeField] MovementSubscription GetInput;
+    [SerializeField] UIInputs GetUIInput;
+    [SerializeField] UIDocument InGameMenu;
     [SerializeField] Camera PlayerCamera;
     [SerializeField] float mouseSensitivity;
     [SerializeField] int speed;
@@ -13,6 +17,7 @@ public class Player : MonoBehaviour
     private Vector2 MouseMovement;
     private float groundCheckDistance = 1.2f;
     private float xRotation = 0f;
+    private bool isMenuOpen = false;
 
     private void Awake()
     {
@@ -20,9 +25,19 @@ public class Player : MonoBehaviour
         rb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ | RigidbodyConstraints.FreezeRotationY;
     }
 
+    private void OnEnable()
+    {
+        UIInputs.OnEscapePressed += ToggleInGameMenu;
+    }
+
+    private void OnDisable()
+    {
+        UIInputs.OnEscapePressed -= ToggleInGameMenu;
+    }
+
     private void Start()
     {
-        Cursor.lockState = CursorLockMode.Locked;
+        UnityEngine.Cursor.lockState = CursorLockMode.Locked;
     }
 
     private void Update()
@@ -53,6 +68,10 @@ public class Player : MonoBehaviour
 
     private void MouseRotatePlayer()
     {
+        if (UnityEngine.Cursor.lockState == CursorLockMode.None)
+        {
+            return;
+        }
         MouseMovement = new Vector2(GetInput.MouseMove.x, GetInput.MouseMove.y);
 
         float mouseX = MouseMovement.x * mouseSensitivity;
@@ -64,9 +83,29 @@ public class Player : MonoBehaviour
         PlayerCamera.transform.localRotation = Quaternion.Euler(xRotation, 0f, 0f);
         transform.Rotate(Vector3.up * mouseX);
     }
-
     private bool IsGrounded()
     {
         return Physics.Raycast(transform.position, Vector3.down, groundCheckDistance);
+    }
+    private void ToggleInGameMenu()
+    {
+        isMenuOpen = !isMenuOpen;
+
+        // Get the root visual element
+        var root = InGameMenu.rootVisualElement;
+
+        // Toggle the visibility of the UI
+        if (isMenuOpen)
+        {
+            root.style.display = DisplayStyle.Flex; // Show the UI
+        }
+        else
+        {
+            root.style.display = DisplayStyle.None; // Hide the UI
+        }
+
+        // Toggle cursor lock state and visibility
+        UnityEngine.Cursor.lockState = isMenuOpen ? CursorLockMode.None : CursorLockMode.Locked;
+        UnityEngine.Cursor.visible = isMenuOpen;
     }
 }

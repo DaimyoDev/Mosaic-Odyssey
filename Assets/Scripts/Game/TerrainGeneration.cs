@@ -95,7 +95,7 @@ public class TerrainGeneration : MonoBehaviour
         Vector3 chunkOrigin = new Vector3(chunkX * chunkSize, 0, chunkZ * chunkSize);
         Chunk chunk = new Chunk
         {
-            VoxelData = new int[chunkSize, height, chunkSize],
+            VoxelData = new byte[chunkSize, height, chunkSize],
             ChunkObject = new GameObject($"Chunk_{chunkX}_{chunkZ}")
         };
 
@@ -140,7 +140,7 @@ public class TerrainGeneration : MonoBehaviour
 
                 for (int y = 0; y < height; y++)
                 {
-                    if (y <= terrainHeight)
+                    if (y <= terrainHeight && y < height)
                     {
                         // Solid terrain
                         chunk.VoxelData[x, y, z] = 1;
@@ -170,7 +170,7 @@ public class TerrainGeneration : MonoBehaviour
     }
     void GenerateGreedyMesh(Chunk chunk)
     {
-        int[,,] voxelData = chunk.VoxelData;
+        byte[,,] voxelData = chunk.VoxelData;
         List<Vector3> vertices = new List<Vector3>();
         List<int> triangles = new List<int>();
         List<Color> colors = new List<Color>();
@@ -266,7 +266,7 @@ public class TerrainGeneration : MonoBehaviour
         chunk.ChunkObject.GetComponent<MeshFilter>().mesh = mesh;
         chunk.ChunkObject.GetComponent<MeshCollider>().sharedMesh = mesh;
     }
-    void GenerateFaces(int x, int y, int z, int width, int depth, int maxHeight, List<Vector3> vertices, List<int> triangles, List<Color> colors, int[,,] voxelData)
+    void GenerateFaces(int x, int y, int z, int width, int depth, int maxHeight, List<Vector3> vertices, List<int> triangles, List<Color> colors, byte[,,] voxelData)
     {
         Color green = new Color(0.1f, 0.3f, 0.1f, 1.0f);
         Color vertexColor = green;
@@ -463,7 +463,7 @@ class Voxel
 
 class Chunk
 {
-    public int[,,] VoxelData;
+    public byte[,,] VoxelData;
     public GameObject ChunkObject;
     public Mesh Mesh;
 }
