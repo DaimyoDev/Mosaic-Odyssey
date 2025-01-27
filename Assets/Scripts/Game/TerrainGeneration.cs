@@ -129,8 +129,8 @@ public class TerrainGeneration : MonoBehaviour
                 float plainsNoise = noiseMap[x, z];
                 float hillsNoise = GeneratePerlinNoise(x, z, 6, 0.7f, 0.0024f, 1.2f, 0.1f, chunkX, chunkZ);
                 hillsNoise = Mathf.Pow(hillsNoise, 1);
-                float mountainNoise = GeneratePerlinNoise(x, z, 8, 0.92f, 0.0025f, 1.3f, 0.25f, chunkX, chunkZ);
-                mountainNoise = Mathf.Pow(mountainNoise, 2.5f);
+                float mountainNoise = GeneratePerlinNoise(x, z, 8, 0.92f, 0.0025f, 1.3f, 0.23f, chunkX, chunkZ);
+                mountainNoise = Mathf.Pow(mountainNoise, 2.3f);
                 float blendedNoise = Mathf.Lerp(plainsNoise, plainsNoise + hillsNoise, hillsMaskMap[x, z]);
                 blendedNoise = Mathf.Lerp(blendedNoise, blendedNoise + mountainNoise, mountainMaskMap[x, z]);
 
@@ -262,18 +262,16 @@ public class TerrainGeneration : MonoBehaviour
         mesh.colors = colors.ToArray();
         mesh.RecalculateNormals();
         mesh.RecalculateBounds();
+        mesh.Optimize();
         chunk.Mesh = mesh;
         chunk.ChunkObject.GetComponent<MeshFilter>().mesh = mesh;
         chunk.ChunkObject.GetComponent<MeshCollider>().sharedMesh = mesh;
     }
     void GenerateFaces(int x, int y, int z, int width, int depth, int maxHeight, List<Vector3> vertices, List<int> triangles, List<Color> colors, byte[,,] voxelData)
     {
-        Color green = new Color(0.1f, 0.3f, 0.1f, 1.0f);
-        Color vertexColor = green;
-
         Color GetColorForHeight(int height)
         {
-            if (height < 200) return green;
+            if (height < 200) return new Color(0.1f, 0.3f, 0.1f, 1.0f);
             if (height < 400) return Color.gray;
             return Color.white;
         }

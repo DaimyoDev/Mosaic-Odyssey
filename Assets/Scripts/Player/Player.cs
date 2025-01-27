@@ -1,4 +1,3 @@
-using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -10,7 +9,9 @@ public class Player : MonoBehaviour
     [SerializeField] Camera PlayerCamera;
     [SerializeField] float mouseSensitivity;
     [SerializeField] int speed;
+    [SerializeField] int sprintSpeed;
     [SerializeField] int jumpPower;
+    [SerializeField] int ascendPower;
     Rigidbody rb;
 
     private Vector3 PlayerMovement;
@@ -18,6 +19,11 @@ public class Player : MonoBehaviour
     private float groundCheckDistance = 1.2f;
     private float xRotation = 0f;
     private bool isMenuOpen = false;
+
+    private bool isFlying = false;
+    private float lastJumpPressTime = 0f;
+    private float doubleTapTimeThreshold = 0.3f;
+    private bool wasJumpKeyPressed = false;
 
     private void Awake()
     {
@@ -44,6 +50,7 @@ public class Player : MonoBehaviour
     {
         MovePlayer();
         MouseRotatePlayer();
+        CheckForDoubleTap();
     }
 
     private void MovePlayer()
@@ -55,12 +62,32 @@ public class Player : MonoBehaviour
 
         Vector3 desiredVelocity = rb.linearVelocity;
 
-        desiredVelocity.x = movementDirection.x * speed;
-        desiredVelocity.z = movementDirection.z * speed;
+        float currentSpeed = GetInput.IsSprinting ? sprintSpeed : speed;
 
-        if (GetInput.Jump > 0 && IsGrounded())
+        desiredVelocity.x = movementDirection.x * currentSpeed;
+        desiredVelocity.z = movementDirection.z * currentSpeed;
+
+        if (isFlying)
         {
-            desiredVelocity.y = GetInput.Jump * jumpPower;
+            rb.useGravity = false;
+
+            if (GetInput.Jump > 0)
+            {
+                desiredVelocity.y = GetInput.Jump * ascendPower;
+            }
+            else
+            {
+                desiredVelocity.y = 0;
+            }
+        }
+        else
+        {
+            rb.useGravity = true;
+
+            if (GetInput.Jump > 0 && IsGrounded())
+            {
+                desiredVelocity.y = GetInput.Jump * jumpPower;
+            }
         }
 
         rb.linearVelocity = desiredVelocity;
@@ -91,21 +118,47 @@ public class Player : MonoBehaviour
     {
         isMenuOpen = !isMenuOpen;
 
-        // Get the root visual element
         var root = InGameMenu.rootVisualElement;
 
-        // Toggle the visibility of the UI
         if (isMenuOpen)
         {
-            root.style.display = DisplayStyle.Flex; // Show the UI
+            root.style.display = DisplayStyle.Flex;
         }
         else
         {
-            root.style.display = DisplayStyle.None; // Hide the UI
+            root.style.display = DisplayStyle.None;
         }
 
-        // Toggle cursor lock state and visibility
         UnityEngine.Cursor.lockState = isMenuOpen ? CursorLockMode.None : CursorLockMode.Locked;
         UnityEngine.Cursor.visible = isMenuOpen;
+    }
+
+    private void CheckForDoubleTap()
+    {
+        if (GetInput.Jump > 0)
+        {
+            if (!wasJumpKeyPressed)
+            {
+                wasJumpKeyPressed = true;
+            }
+        }
+        else
+        {
+            if (wasJumpKeyPressed)
+            {
+                if (Time.time - lastJumpPressTime < doubleTapTimeThreshold)
+                {
+                    ToggleFlying();
+                }
+                lastJumpPressTime = Time.time;
+            }
+            wasJumpKeyPressed = false;
+        }
+    }
+
+    private void ToggleFlying()
+    {
+        isFlying = !isFlying;
+        rb.useGravity = !isFlying;
     }
 }

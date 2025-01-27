@@ -6,7 +6,7 @@ public class MovementSubscription : MonoBehaviour
     //References to InputSystem
     public Vector3 MoveInput { get; private set; } = Vector3.zero;
     public float Jump { get; private set; } = 0.0f;
-
+    public bool IsSprinting { get; private set; } = false;
     public Vector2 MouseMove { get; private set; } = Vector2.zero;
 
     InputMap _Input = null;
@@ -19,11 +19,14 @@ public class MovementSubscription : MonoBehaviour
         _Input.Player.Movement.performed += SetMovement;
         _Input.Player.Movement.canceled += SetMovement;
 
-        _Input.Player.Jump.performed += SetAction;
-        _Input.Player.Jump.canceled += SetAction;
+        _Input.Player.Jump.performed += SetJump;
+        _Input.Player.Jump.canceled += SetJump;
 
         _Input.Player.MouseMove.performed += SetMouseMovement;
         _Input.Player.MouseMove.canceled += SetMouseMovement;
+
+        _Input.Player.Sprint.performed += SetSprint;
+        _Input.Player.Sprint.canceled += SetSprint;
     }
 
     private void OnDisable() //Stop listening to Inputs
@@ -31,11 +34,14 @@ public class MovementSubscription : MonoBehaviour
         _Input.Player.Movement.performed -= SetMovement;
         _Input.Player.Movement.canceled -= SetMovement;
 
-        _Input.Player.Jump.performed -= SetAction;
-        _Input.Player.Jump.canceled -= SetAction;
+        _Input.Player.Jump.performed -= SetJump;
+        _Input.Player.Jump.canceled -= SetJump;
 
         _Input.Player.MouseMove.performed -= SetMouseMovement;
         _Input.Player.MouseMove.canceled -= SetMouseMovement;
+
+        _Input.Player.Sprint.performed -= SetSprint;
+        _Input.Player.Sprint.canceled -= SetSprint;
 
         _Input.Player.Disable();
     }
@@ -46,7 +52,7 @@ public class MovementSubscription : MonoBehaviour
         MoveInput = ctx.ReadValue<Vector3>();
     }
 
-    void SetAction(InputAction.CallbackContext ctx)
+    void SetJump(InputAction.CallbackContext ctx)
     {
         Jump = ctx.ReadValue<float>();
     }
@@ -54,5 +60,10 @@ public class MovementSubscription : MonoBehaviour
     void SetMouseMovement(InputAction.CallbackContext ctx)
     {
         MouseMove = ctx.ReadValue<Vector2>();
+    }
+
+    void SetSprint(InputAction.CallbackContext ctx)
+    {
+        IsSprinting = ctx.ReadValue<float>() > 0;
     }
 }
