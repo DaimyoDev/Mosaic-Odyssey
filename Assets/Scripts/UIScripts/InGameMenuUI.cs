@@ -4,40 +4,51 @@ using UnityEngine.UIElements;
 
 public class InGameMenuUI : MonoBehaviour
 {
+    [SerializeField] SaveLoadUI saveLoadUI;
+    [SerializeField] ControlsUI controlsUI;
     private VisualElement ui;
     private Button mainMenuButton;
+    private Button saveLoadButton;
+    private Button controlsButton;
     private Button quitButton;
 
     private void Start()
     {
-        // Initialize the UI when the game starts
         InitializeUI();
 
-        // Hide the UI at start
         HideUI();
+
+        if (saveLoadUI == null)
+        {
+            Debug.LogError("SaveLoadUI script not found!");
+        }
     }
 
     private void InitializeUI()
     {
-        // Get the root visual element
         ui = GetComponent<UIDocument>().rootVisualElement;
 
-        // Ensure the root visual element is not null
         if (ui == null)
         {
             Debug.LogError("rootVisualElement is null!");
             return;
         }
 
-        // Find the buttons and set up event listeners
         mainMenuButton = ui.Q<Button>("MainMenu");
         if (mainMenuButton != null)
         {
             mainMenuButton.clicked += OnMainMenuButtonClicked;
         }
-        else
+
+        saveLoadButton = ui.Q<Button>("SaveLoad");
+        if (saveLoadButton != null)
         {
-            Debug.LogError("MainMenu button not found!");
+            saveLoadButton.clicked += OnSaveLoadButtonClicked;
+        }
+
+        controlsButton = ui.Q<Button>("Controls");
+        {
+            controlsButton.clicked += OnControlsButtonClicked;
         }
 
         quitButton = ui.Q<Button>("Quit");
@@ -45,28 +56,20 @@ public class InGameMenuUI : MonoBehaviour
         {
             quitButton.clicked += OnQuitButtonClicked;
         }
-        else
-        {
-            Debug.LogError("Quit button not found!");
-        }
     }
 
     public void ShowUI()
     {
-        // Show the UI by setting display to Flex
         ui.style.display = DisplayStyle.Flex;
 
-        // Unlock and show the cursor
         UnityEngine.Cursor.lockState = CursorLockMode.None;
         UnityEngine.Cursor.visible = true;
     }
 
     public void HideUI()
     {
-        // Hide the UI by setting display to None
         ui.style.display = DisplayStyle.None;
 
-        // Lock and hide the cursor
         UnityEngine.Cursor.lockState = CursorLockMode.Locked;
         UnityEngine.Cursor.visible = false;
     }
@@ -74,6 +77,32 @@ public class InGameMenuUI : MonoBehaviour
     private void OnMainMenuButtonClicked()
     {
         SceneManager.LoadScene("MainMenu");
+    }
+
+    private void OnSaveLoadButtonClicked()
+    {
+        if (saveLoadUI != null)
+        {
+            saveLoadUI.Initialize();
+            ui.style.display = DisplayStyle.None;
+        }
+        else
+        {
+            Debug.LogError("SaveLoadUI is not assigned!");
+        }
+    }
+
+    private void OnControlsButtonClicked()
+    {
+        if (controlsButton != null)
+        {
+            controlsUI.Initialize();
+            ui.style.display = DisplayStyle.None;
+        }
+        else
+        {
+            Debug.LogError("ControlsUI is not assigned!");
+        }
     }
 
     private void OnQuitButtonClicked()

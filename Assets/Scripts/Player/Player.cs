@@ -12,17 +12,17 @@ public class Player : MonoBehaviour
     [SerializeField] int sprintSpeed;
     [SerializeField] int jumpPower;
     [SerializeField] int ascendPower;
+    [SerializeField] int Health;
+    [SerializeField] int Stamina;
     Rigidbody rb;
 
     private Vector3 PlayerMovement;
     private Vector2 MouseMovement;
-    private float groundCheckDistance = 1.2f;
+    private readonly float groundCheckDistance = 1.2f;
     private float xRotation = 0f;
-    private bool isMenuOpen = false;
-
     private bool isFlying = false;
     private float lastJumpPressTime = 0f;
-    private float doubleTapTimeThreshold = 0.3f;
+    private readonly float doubleTapTimeThreshold = 0.3f;
     private bool wasJumpKeyPressed = false;
 
     private void Awake()
@@ -116,21 +116,21 @@ public class Player : MonoBehaviour
     }
     private void ToggleInGameMenu()
     {
-        isMenuOpen = !isMenuOpen;
 
         var root = InGameMenu.rootVisualElement;
 
-        if (isMenuOpen)
+        if (root.style.display == DisplayStyle.None)
         {
             root.style.display = DisplayStyle.Flex;
+            UnityEngine.Cursor.visible = true;
+            UnityEngine.Cursor.lockState = CursorLockMode.None;
         }
         else
         {
             root.style.display = DisplayStyle.None;
+            UnityEngine.Cursor.visible = false;
+            UnityEngine.Cursor.lockState = CursorLockMode.Locked;
         }
-
-        UnityEngine.Cursor.lockState = isMenuOpen ? CursorLockMode.None : CursorLockMode.Locked;
-        UnityEngine.Cursor.visible = isMenuOpen;
     }
 
     private void CheckForDoubleTap()

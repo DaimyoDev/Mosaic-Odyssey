@@ -5,10 +5,11 @@ public class PlayerBuildSystem : MonoBehaviour
     [SerializeField] BuildInputs GetBuildInputs;
     [SerializeField] Camera PlayerCamera;
     [SerializeField] GameObject TransparentCubePrefab;
+    [SerializeField] GameObject SolidCubePrefab;
 
     private GameObject currentCube;
     private bool isBuildModeActive = false;
-    private float cubeSize = 1.0f; // Assuming the cube has a size of 1 unit
+    private float cubeSize = 0.5f;
 
     private void Update()
     {
@@ -19,7 +20,20 @@ public class PlayerBuildSystem : MonoBehaviour
                 EnableBuildMode();
             }
 
-            MoveCube();
+            Vector3 buildDirection = GetBuildInputs.GetBuildDirection();
+            if (buildDirection != Vector3.zero)
+            {
+                MoveCube(buildDirection);
+            }
+            else if (GetBuildInputs.IsLeftMouseClickPressed())
+            {
+                MoveCubeWithMouse();
+            }
+
+            if (GetBuildInputs.IsPlaceBlockPressed())
+            {
+                PlaceBlock();
+            }
         }
         else if (isBuildModeActive)
         {
@@ -31,7 +45,7 @@ public class PlayerBuildSystem : MonoBehaviour
     {
         isBuildModeActive = true;
         Vector3 spawnPosition = PlayerCamera.transform.position + PlayerCamera.transform.forward * 5;
-        spawnPosition = SnapToGrid(spawnPosition); // Snap the spawn position to the grid
+        spawnPosition = SnapToGrid(spawnPosition);
         currentCube = Instantiate(TransparentCubePrefab, spawnPosition, Quaternion.identity);
     }
 
@@ -44,33 +58,64 @@ public class PlayerBuildSystem : MonoBehaviour
         }
     }
 
-    private void MoveCube()
+    private void MoveCube(Vector3 buildDirection)
     {
         if (currentCube == null) return;
 
-        Vector3 buildDirection = GetBuildInputs.GetBuildDirection();
-        if (buildDirection != Vector3.zero)
+        if (buildDirection.x != 0 || buildDirection.z != 0)
         {
-            // Move the cube in discrete steps (one grid unit at a time)
-            Vector3 relativeDirection = PlayerCamera.transform.TransformDirection(buildDirection);
-            relativeDirection.Normalize(); // Ensure consistent movement speed
+            Vector3 cameraForward = PlayerCamera.transform.forward;
+            Vector3 cameraRight = PlayerCamera.transform.right;
+            cameraForward.y = 0f;
+            cameraRight.y = 0f;
+            cameraForward.Normalize();
+            cameraRight.Normalize();
 
-            // Calculate the new position by adding the direction (scaled by cubeSize)
+            Vector3 relativeDirection = (cameraForward * buildDirection.z) + (cameraRight * buildDirection.x);
+            relativeDirection.Normalize();
+
             Vector3 newPosition = currentCube.transform.position + relativeDirection * cubeSize;
+            newPosition = SnapToGrid(newPosition);
+            currentCube.transform.position = newPosition;
+        }
 
-            // Snap the new position to the grid
+        if (buildDirection.y != 0)
+        {
+            Vector3 newPosition = currentCube.transform.position + Vector3.up * buildDirection.y * cubeSize;
+            newPosition = SnapToGrid(newPosition);
+            currentCube.transform.position = newPosition;
+        }
+    }
+
+    private void MoveCubeWithMouse()
+    {
+        if (currentCube == null) return;
+
+        Ray ray = PlayerCamera.ScreenPointToRay(Input.mousePosition);
+        if (Physics.Raycast(ray, out RaycastHit hit))
+        {
+            Vector3 offset = hit.normal * (cubeSize);
+
+            Vector3 newPosition = hit.point + offset;
+
             newPosition = SnapToGrid(newPosition);
 
-            // Update the cube's position
             currentCube.transform.position = newPosition;
+        }
+    }
+
+    private void PlaceBlock()
+    {
+        if (currentCube != null)
+        {
+            Instantiate(SolidCubePrefab, currentCube.transform.position, Quaternion.identity);
         }
     }
 
     private Vector3 SnapToGrid(Vector3 position)
     {
-        // Snap the position to the nearest grid point based on the cube size
         position.x = Mathf.Round(position.x / cubeSize) * cubeSize;
-        position.y = Mathf.Round(position.y / cubeSize) * cubeSize; // Snap Y-axis
+        position.y = Mathf.Round(position.y / cubeSize) * cubeSize;
         position.z = Mathf.Round(position.z / cubeSize) * cubeSize;
 
         return position;

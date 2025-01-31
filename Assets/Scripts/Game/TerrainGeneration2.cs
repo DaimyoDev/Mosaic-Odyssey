@@ -1,7 +1,8 @@
+using NUnit.Framework.Constraints;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class TerrainGeneration : MonoBehaviour
+public class TerrainGeneration2 : MonoBehaviour
 {
 
     [SerializeField] int width;
@@ -16,9 +17,8 @@ public class TerrainGeneration : MonoBehaviour
 
 
 
-    private Queue<GameObject> voxelPool = new Queue<GameObject>();
     private Queue<Vector2Int> chunkQueue = new Queue<Vector2Int>();
-    private Dictionary<Vector2Int, Chunk> chunkVoxels = new Dictionary<Vector2Int, Chunk>();
+    private Dictionary<Vector2Int, Chunk1> chunkVoxels = new Dictionary<Vector2Int, Chunk1>();
     private int chunkCountX, chunkCountZ;
 
     private bool isGenerating = false;
@@ -93,7 +93,7 @@ public class TerrainGeneration : MonoBehaviour
     void GenerateChunk(int chunkX, int chunkZ)
     {
         Vector3 chunkOrigin = new Vector3(chunkX * chunkSize, 0, chunkZ * chunkSize);
-        Chunk chunk = new Chunk
+        Chunk1 chunk = new Chunk1
         {
             VoxelData = new byte[chunkSize, height, chunkSize],
             ChunkObject = new GameObject($"Chunk_{chunkX}_{chunkZ}")
@@ -109,16 +109,16 @@ public class TerrainGeneration : MonoBehaviour
             for (int z = 0; z < chunkSize; z++)
             {
                 // Compute plains noise
-                noiseMap[x, z] = GeneratePerlinNoise(x, z, 4, 0.3f, 0.001f, 0.001f, 0.25f, chunkX, chunkZ);
+                noiseMap[x, z] = GeneratePerlinNoise(x, z, 8, 0.3f, 0.001f, 0.001f, 0.25f, chunkX, chunkZ);
 
                 // Compute hills mask
                 hillsMaskMap[x, z] = Mathf.PerlinNoise((x + chunkX * chunkSize + (seed * 0.3f)) * 0.0023f,
                                                        (z + chunkZ * chunkSize + (seed * 0.3f)) * 0.0023f);
-                hillsMaskMap[x, z] = Mathf.Clamp01((hillsMaskMap[x, z] - 0.45f) / 0.3f);
+                hillsMaskMap[x, z] = Mathf.Clamp01((hillsMaskMap[x, z] - 0.45f) / 0.4f);
 
                 mountainMaskMap[x, z] = Mathf.PerlinNoise((x + chunkX * chunkSize + (seed * 0.5f)) * 0.002f,
                                                       (z + chunkZ * chunkSize + (seed * 0.5f)) * 0.002f);
-                mountainMaskMap[x, z] = Mathf.Clamp01((mountainMaskMap[x, z] - 0.65f) / 0.2f);
+                mountainMaskMap[x, z] = Mathf.Clamp01((mountainMaskMap[x, z] - 0.65f) / 0.25f);
             }
         }
 
@@ -127,10 +127,10 @@ public class TerrainGeneration : MonoBehaviour
             for (int z = 0; z < chunkSize; z++)
             {
                 float plainsNoise = noiseMap[x, z];
-                float hillsNoise = GeneratePerlinNoise(x, z, 6, 0.7f, 0.0024f, 1.2f, 0.1f, chunkX, chunkZ);
+                float hillsNoise = GeneratePerlinNoise(x, z, 8, 0.7f, 0.0024f, 1.2f, 0.1f, chunkX, chunkZ);
                 hillsNoise = Mathf.Pow(hillsNoise, 1);
-                float mountainNoise = GeneratePerlinNoise(x, z, 8, 0.92f, 0.0025f, 1.3f, 0.20f, chunkX, chunkZ);
-                mountainNoise = Mathf.Pow(mountainNoise, 2.1f);
+                float mountainNoise = GeneratePerlinNoise(x, z, 8, 0.92f, 0.0025f, 1.3f, 0.25f, chunkX, chunkZ);
+                mountainNoise = Mathf.Pow(mountainNoise, 2f);
                 float blendedNoise = Mathf.Lerp(plainsNoise, plainsNoise + hillsNoise, hillsMaskMap[x, z]);
                 blendedNoise = Mathf.Lerp(blendedNoise, blendedNoise + mountainNoise, mountainMaskMap[x, z]);
 
@@ -140,7 +140,7 @@ public class TerrainGeneration : MonoBehaviour
 
                 for (int y = 0; y < height; y++)
                 {
-                    if (y <= terrainHeight && y < height)
+                    if (y <= terrainHeight)
                     {
                         // Solid terrain
                         chunk.VoxelData[x, y, z] = 1;
@@ -153,7 +153,7 @@ public class TerrainGeneration : MonoBehaviour
                     {
                         // Air or empty space above the water level
                         chunk.VoxelData[x, y, z] = 0;
-                    }  
+                    }
                 }
             }
         }
@@ -168,7 +168,7 @@ public class TerrainGeneration : MonoBehaviour
         GenerateGreedyMesh(chunk);
         isGenerating = false;
     }
-    void GenerateGreedyMesh(Chunk chunk)
+    void GenerateGreedyMesh(Chunk1 chunk)
     {
         byte[,,] voxelData = chunk.VoxelData;
         List<Vector3> vertices = new List<Vector3>();
@@ -262,16 +262,18 @@ public class TerrainGeneration : MonoBehaviour
         mesh.colors = colors.ToArray();
         mesh.RecalculateNormals();
         mesh.RecalculateBounds();
-        mesh.Optimize();
         chunk.Mesh = mesh;
         chunk.ChunkObject.GetComponent<MeshFilter>().mesh = mesh;
         chunk.ChunkObject.GetComponent<MeshCollider>().sharedMesh = mesh;
     }
     void GenerateFaces(int x, int y, int z, int width, int depth, int maxHeight, List<Vector3> vertices, List<int> triangles, List<Color> colors, byte[,,] voxelData)
     {
+        Color green = new Color(0.1f, 0.3f, 0.1f, 1.0f);
+        Color vertexColor = green;
+
         Color GetColorForHeight(int height)
         {
-            if (height < 200) return new Color(0.1f, 0.3f, 0.1f, 1.0f);
+            if (height < 200) return green;
             if (height < 400) return Color.gray;
             return Color.white;
         }
@@ -446,20 +448,7 @@ public class TerrainGeneration : MonoBehaviour
     }
 }
 
-
-class Voxel
-{
-    public Vector3 Position { get; private set; }
-    public float Height { get; private set; }
-
-    public Voxel(Vector3 position, float height)
-    {
-        Position = position;
-        Height = height;
-    }
-}
-
-class Chunk
+class Chunk1
 {
     public byte[,,] VoxelData;
     public GameObject ChunkObject;
